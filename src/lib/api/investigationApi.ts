@@ -67,6 +67,15 @@ function convertSECFilingToTrust(
 
   matchReasons.push('SEC EDGAR filing match');
 
+  // Extract CIK from document URL if available
+  let cik: string | undefined;
+  if (filing.documentUrl) {
+    const cikMatch = filing.documentUrl.match(/\/data\/(\d+)\//);
+    if (cikMatch && cikMatch[1]) {
+      cik = cikMatch[1];
+    }
+  }
+
   return {
     trustId: filing.dealId || `SEC-${Date.now()}-${index}`,
     dealId: filing.dealId,
@@ -81,6 +90,11 @@ function convertSECFilingToTrust(
     matchScore: Math.min(matchScore, 100),
     matchReasons,
     secLink: filing.documentUrl,
+    // Company identification
+    cik,
+    ein: filing.ein,
+    stateOfIncorporation: filing.stateOfIncorporation,
+    businessAddress: filing.businessAddress,
   };
 }
 
@@ -465,6 +479,11 @@ export async function performEnhancedInvestigationAPI(
       matchScore: trust.matchScore || 50,
       matchReasons: trust.matchReasons || ['Enhanced investigation match'],
       secLink: trust.secLink || trust.documentUrl,
+      // Company identification fields
+      cik: trust.cik,
+      ein: trust.ein,
+      stateOfIncorporation: trust.stateOfIncorporation,
+      businessAddress: trust.businessAddress,
       // Enhanced fields
       servicerComplaints: data.servicerInfo?.complaints ? {
         totalComplaints: data.servicerInfo.complaints.totalComplaints,
