@@ -5,6 +5,7 @@
  * Useful for finding trust information, deal documents, and company data.
  *
  * API Docs: https://www.sec.gov/search-filings/edgar-application-programming-interfaces
+ * Updated: 2025-01-18 - Added CIK extraction
  */
 
 const SEC_EDGAR_API = 'https://efts.sec.gov/LATEST/search-index';
