@@ -83,6 +83,41 @@ export interface SECSearchResult {
   error?: string;
 }
 
+// Company details cache to avoid redundant API calls
+const companyCache = new Map<string, { data: SECCompany | null; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Clean trust name by removing CIK suffixes in various formats
+ */
+function cleanTrustName(name: string, cik?: string): string {
+  if (!name) return 'Unknown Trust';
+
+  let cleaned = name;
+
+  // Remove various CIK suffix patterns
+  // Pattern 1: (CIK 0001234567)
+  cleaned = cleaned.replace(/\s*\(CIK\s*\d{1,10}\)/gi, '');
+
+  // Pattern 2: (0001234567) - just the number in parens
+  cleaned = cleaned.replace(/\s*\(\d{10}\)$/g, '');
+
+  // Pattern 3: CIK: 0001234567
+  cleaned = cleaned.replace(/\s*CIK:\s*\d{1,10}/gi, '');
+
+  // Pattern 4: [CIK 0001234567]
+  cleaned = cleaned.replace(/\s*\[CIK\s*\d{1,10}\]/gi, '');
+
+  // If specific CIK provided, also remove that exact value
+  if (cik) {
+    const paddedCik = cik.padStart(10, '0');
+    cleaned = cleaned.replace(new RegExp(`\\s*\\(${paddedCik}\\)`, 'g'), '');
+    cleaned = cleaned.replace(new RegExp(`\\s*\\(CIK\\s*${paddedCik}\\)`, 'gi'), '');
+  }
+
+  return cleaned.trim() || 'Unknown Trust';
+}
+
 /**
  * Search for ABS/MBS trust filings
  */
@@ -115,21 +150,24 @@ export async function searchABSFilings(query: string, dateRange?: { start: strin
     const data = await response.json();
 
     const documents: TrustDocument[] = (data.hits?.hits || []).map((hit: any) => {
-      const cik = hit._source?.ciks?.[0];
-      // Clean trust name - remove CIK if it's appended to the display name
+      const rawCik = hit._source?.ciks?.[0];
+      // Validate CIK - must be 1-10 digits only
+      const validCik = rawCik && /^\d{1,10}$/.test(rawCik) ? rawCik.padStart(10, '0') : undefined;
+
+      // Clean trust name - remove CIK suffix in various formats
       let trustName = hit._source?.display_names?.[0] || hit._source?.entity || 'Unknown Trust';
-      if (cik && trustName.includes(`(CIK ${cik.padStart(10, '0')})`)) {
-        trustName = trustName.replace(`(CIK ${cik.padStart(10, '0')})`, '').trim();
-      }
+      trustName = cleanTrustName(trustName, rawCik);
 
       return {
         trustName,
         filingDate: hit._source?.file_date || '',
         formType: hit._source?.form || '',
-        documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${hit._id.replace(/-/g, '')}`,
+        documentUrl: validCik
+          ? `https://www.sec.gov/Archives/edgar/data/${validCik}/${hit._id.replace(/-/g, '')}`
+          : undefined,
         issuer: hit._source?.entity,
         // Company identification
-        cik: cik ? cik.padStart(10, '0') : undefined,
+        cik: validCik,
       };
     });
 
@@ -190,16 +228,17 @@ async function searchByCompany(companyName: string): Promise<SECSearchResult> {
       const formType = entry.match(/<category[^>]*term="([^"]+)"/)?.[1] || '';
 
       if (title && link) {
-        // Extract CIK from SEC link if available
+        // Extract and validate CIK from SEC link if available
         const cikMatch = link.match(/\/data\/(\d+)\//);
-        const cik = cikMatch ? cikMatch[1].padStart(10, '0') : undefined;
+        const rawCik = cikMatch ? cikMatch[1] : undefined;
+        const validCik = rawCik && /^\d{1,10}$/.test(rawCik) ? rawCik.padStart(10, '0') : undefined;
 
         entries.push({
-          trustName: title,
+          trustName: cleanTrustName(title, rawCik),
           filingDate: updated.split('T')[0],
           formType,
           documentUrl: link,
-          cik,
+          cik: validCik,
         });
       }
     }
@@ -217,12 +256,24 @@ async function searchByCompany(companyName: string): Promise<SECSearchResult> {
 }
 
 /**
- * Get company details by CIK
+ * Get company details by CIK (with caching)
  */
 export async function getCompanyByCIK(cik: string): Promise<SECCompany | null> {
   try {
+    // Validate CIK format
+    if (!cik || !/^\d{1,10}$/.test(cik)) {
+      console.warn('Invalid CIK format:', cik);
+      return null;
+    }
+
     // Pad CIK to 10 digits
     const paddedCIK = cik.padStart(10, '0');
+
+    // Check cache first
+    const cached = companyCache.get(paddedCIK);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
 
     const response = await fetch(`${SEC_SUBMISSIONS_API}/CIK${paddedCIK}.json`, {
       headers: {
@@ -232,6 +283,8 @@ export async function getCompanyByCIK(cik: string): Promise<SECCompany | null> {
     });
 
     if (!response.ok) {
+      // Cache negative result to avoid repeated failed requests
+      companyCache.set(paddedCIK, { data: null, timestamp: Date.now() });
       return null;
     }
 
@@ -247,11 +300,11 @@ export async function getCompanyByCIK(cik: string): Promise<SECCompany | null> {
         form: recentFilings.form[i],
         fileNumber: recentFilings.fileNumber?.[i] || '',
         primaryDocument: recentFilings.primaryDocument?.[i] || '',
-        filingUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${recentFilings.accessionNumber[i].replace(/-/g, '')}`,
+        filingUrl: `https://www.sec.gov/Archives/edgar/data/${paddedCIK}/${recentFilings.accessionNumber[i].replace(/-/g, '')}`,
       });
     }
 
-    return {
+    const company: SECCompany = {
       cik: data.cik,
       ein: data.ein,
       name: data.name,
@@ -269,6 +322,11 @@ export async function getCompanyByCIK(cik: string): Promise<SECCompany | null> {
       fiscalYearEnd: data.fiscalYearEnd,
       filings,
     };
+
+    // Cache the result
+    companyCache.set(paddedCIK, { data: company, timestamp: Date.now() });
+
+    return company;
   } catch (error) {
     console.error('SEC company lookup error:', error);
     return null;

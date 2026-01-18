@@ -10,6 +10,7 @@ import {
   searchTrustsAPI,
   getTradingDataAPI,
   performEnhancedInvestigationAPI,
+  getCompanyByCIKAPI,
 } from '@/lib';
 
 export type InvestigationStep = 0 | 1 | 2 | 3;
@@ -380,6 +381,26 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
 
           // Set activeDebtType from the trust's type for letter generation
           set({ selectedTrust: trust, activeDebtType: trust.type, step: 3, isLoading: true }, false, 'selectTrust');
+
+          // Lazy-load EIN enrichment if trust has CIK but no EIN
+          let enrichedTrust = trust;
+          if (trust.cik && !trust.ein) {
+            try {
+              const companyDetails = await getCompanyByCIKAPI(trust.cik);
+              if (companyDetails) {
+                enrichedTrust = {
+                  ...trust,
+                  ein: companyDetails.ein,
+                  stateOfIncorporation: companyDetails.stateOfIncorporation || trust.stateOfIncorporation,
+                  businessAddress: companyDetails.businessAddress || trust.businessAddress,
+                };
+                // Update selected trust with enriched data
+                set({ selectedTrust: enrichedTrust }, false, 'trustEnriched');
+              }
+            } catch (error) {
+              console.warn('Failed to enrich trust with company details:', error);
+            }
+          }
 
           if (cusip) {
             try {

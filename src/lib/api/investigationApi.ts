@@ -552,3 +552,67 @@ export async function quickEnhancedInvestigationAPI(
     quick: true,
   });
 }
+
+/**
+ * Company details from SEC by CIK
+ */
+export interface SECCompanyDetails {
+  cik: string;
+  ein?: string;
+  name: string;
+  ticker?: string;
+  sic?: string;
+  sicDescription?: string;
+  stateOfIncorporation?: string;
+  businessAddress?: {
+    street1?: string;
+    street2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
+  fiscalYearEnd?: string;
+}
+
+/**
+ * Fetch company details by CIK for EIN enrichment
+ */
+export async function getCompanyByCIKAPI(cik: string): Promise<SECCompanyDetails | null> {
+  try {
+    // Validate CIK format
+    if (!cik || !/^\d{1,10}$/.test(cik.replace(/^0+/, ''))) {
+      console.warn('Invalid CIK for company lookup:', cik);
+      return null;
+    }
+
+    const response = await fetch(`/api/sec/company/${encodeURIComponent(cik)}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Company lookup failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success || !data.data) {
+      return null;
+    }
+
+    return {
+      cik: data.data.cik,
+      ein: data.data.ein,
+      name: data.data.name,
+      ticker: data.data.ticker,
+      sic: data.data.sic,
+      sicDescription: data.data.sicDescription,
+      stateOfIncorporation: data.data.stateOfIncorporation,
+      businessAddress: data.data.businessAddress,
+      fiscalYearEnd: data.data.fiscalYearEnd,
+    };
+  } catch (error) {
+    console.error('Company lookup error:', error);
+    return null;
+  }
+}
