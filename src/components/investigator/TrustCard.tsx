@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Building2, Calendar, Shield, TrendingUp, ExternalLink, ChevronRight, AlertTriangle, CheckCircle2, Database, FileCheck } from 'lucide-react';
+import { Building2, Calendar, Shield, TrendingUp, ExternalLink, ChevronRight, AlertTriangle, CheckCircle2, Database, FileCheck, Hash, MapPin } from 'lucide-react';
 import { Trust } from '@/types';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -100,6 +100,41 @@ export function TrustCard({ trust, isSelected, onSelect, rank }: TrustCardProps)
               </div>
             )}
           </div>
+
+          {/* Company Identification */}
+          {(trust.ein || trust.cik) && (
+            <div className="grid grid-cols-2 gap-3 text-sm pt-2 border-t border-dashed">
+              {trust.ein && (
+                <div className="flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">EIN:</span>
+                  <span className="font-mono font-medium">{trust.ein}</span>
+                </div>
+              )}
+              {trust.cik && (
+                <div className="flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">CIK:</span>
+                  <a
+                    href={`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${trust.cik}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono font-medium text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {trust.cik}
+                  </a>
+                </div>
+              )}
+              {trust.stateOfIncorporation && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">State:</span>
+                  <span className="font-medium">{trust.stateOfIncorporation}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* CUSIPs */}
           <div className="space-y-2">

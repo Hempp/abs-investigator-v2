@@ -57,6 +57,18 @@ export interface Trust {
   matchReasons: string[];
   secLink?: string;
 
+  // Company identification
+  cik?: string;
+  ein?: string;
+  stateOfIncorporation?: string;
+  businessAddress?: {
+    street1?: string;
+    street2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
+
   // Enhanced data from multi-source investigation
   servicerComplaints?: ServicerComplaintData;
   economicContext?: EconomicContext;

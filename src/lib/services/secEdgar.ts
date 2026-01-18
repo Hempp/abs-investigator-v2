@@ -42,11 +42,19 @@ export interface SECFiling {
 
 export interface SECCompany {
   cik: string;
+  ein?: string;
   name: string;
   ticker?: string;
   sic?: string;
   sicDescription?: string;
   stateOfIncorporation?: string;
+  businessAddress?: {
+    street1?: string;
+    street2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
   fiscalYearEnd?: string;
   filings: SECFiling[];
 }
@@ -224,11 +232,19 @@ export async function getCompanyByCIK(cik: string): Promise<SECCompany | null> {
 
     return {
       cik: data.cik,
+      ein: data.ein,
       name: data.name,
       ticker: data.tickers?.[0],
       sic: data.sic,
       sicDescription: data.sicDescription,
       stateOfIncorporation: data.stateOfIncorporation,
+      businessAddress: data.addresses?.business ? {
+        street1: data.addresses.business.street1,
+        street2: data.addresses.business.street2,
+        city: data.addresses.business.city,
+        state: data.addresses.business.stateOrCountry,
+        zip: data.addresses.business.zipCode,
+      } : undefined,
       fiscalYearEnd: data.fiscalYearEnd,
       filings,
     };

@@ -380,6 +380,32 @@ async function enhanceTrustWithMultipleSources(
     const dataSources: string[] = ['SEC EDGAR'];
     let confidenceScore = 40; // Base score for SEC match
 
+    // Company identification fields
+    let cik: string | undefined;
+    let ein: string | undefined;
+    let stateOfIncorporation: string | undefined;
+    let businessAddress: { street1?: string; street2?: string; city?: string; state?: string; zip?: string } | undefined;
+
+    // Extract CIK from filing URL and fetch company details
+    if (filing.documentUrl) {
+      const cikMatch = filing.documentUrl.match(/\/data\/(\d+)\//);
+      if (cikMatch && cikMatch[1]) {
+        const extractedCik = cikMatch[1];
+        cik = extractedCik;
+        try {
+          const companyData = await getCompanyByCIK(extractedCik);
+          if (companyData) {
+            ein = companyData.ein;
+            stateOfIncorporation = companyData.stateOfIncorporation;
+            businessAddress = companyData.businessAddress;
+            confidenceScore += 15; // Boost for having company details
+          }
+        } catch (error) {
+          console.error('Company lookup error:', error);
+        }
+      }
+    }
+
     // Add known CUSIPs
     if (knownCusips) {
       knownCusips.forEach((cusip, i) => {
@@ -452,6 +478,11 @@ async function enhanceTrustWithMultipleSources(
       matchScore: Math.min(confidenceScore, 100),
       matchReasons: dataSources.map(s => `Verified via ${s}`),
       secLink: filing.documentUrl,
+      // Company identification
+      cik,
+      ein,
+      stateOfIncorporation,
+      businessAddress,
       verification: {
         secVerified: true,
         figiVerified: dataSources.includes('OpenFIGI'),
