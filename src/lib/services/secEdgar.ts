@@ -70,6 +70,10 @@ export interface TrustDocument {
   issuer?: string;
   underwriter?: string;
   dealSize?: number;
+  // Company identification
+  cik?: string;
+  ein?: string;
+  stateOfIncorporation?: string;
 }
 
 export interface SECSearchResult {
@@ -109,13 +113,24 @@ export async function searchABSFilings(query: string, dateRange?: { start: strin
 
     const data = await response.json();
 
-    const documents: TrustDocument[] = (data.hits?.hits || []).map((hit: any) => ({
-      trustName: hit._source?.display_names?.[0] || hit._source?.entity || 'Unknown Trust',
-      filingDate: hit._source?.file_date || '',
-      formType: hit._source?.form || '',
-      documentUrl: `https://www.sec.gov/Archives/edgar/data/${hit._source?.ciks?.[0]}/${hit._id.replace(/-/g, '')}`,
-      issuer: hit._source?.entity,
-    }));
+    const documents: TrustDocument[] = (data.hits?.hits || []).map((hit: any) => {
+      const cik = hit._source?.ciks?.[0];
+      // Clean trust name - remove CIK if it's appended to the display name
+      let trustName = hit._source?.display_names?.[0] || hit._source?.entity || 'Unknown Trust';
+      if (cik && trustName.includes(`(CIK ${cik.padStart(10, '0')})`)) {
+        trustName = trustName.replace(`(CIK ${cik.padStart(10, '0')})`, '').trim();
+      }
+
+      return {
+        trustName,
+        filingDate: hit._source?.file_date || '',
+        formType: hit._source?.form || '',
+        documentUrl: `https://www.sec.gov/Archives/edgar/data/${cik}/${hit._id.replace(/-/g, '')}`,
+        issuer: hit._source?.entity,
+        // Company identification
+        cik: cik ? cik.padStart(10, '0') : undefined,
+      };
+    });
 
     return {
       success: true,
@@ -174,11 +189,16 @@ async function searchByCompany(companyName: string): Promise<SECSearchResult> {
       const formType = entry.match(/<category[^>]*term="([^"]+)"/)?.[1] || '';
 
       if (title && link) {
+        // Extract CIK from SEC link if available
+        const cikMatch = link.match(/\/data\/(\d+)\//);
+        const cik = cikMatch ? cikMatch[1].padStart(10, '0') : undefined;
+
         entries.push({
           trustName: title,
           filingDate: updated.split('T')[0],
           formType,
           documentUrl: link,
+          cik,
         });
       }
     }
@@ -292,10 +312,10 @@ export async function getABSIssuerInfo(issuerName: string): Promise<{
     let issuer: SECCompany | null = null;
 
     if (searchResult.data && searchResult.data.length > 0) {
-      // Extract CIK from filing URL if available
-      const cikMatch = searchResult.data[0].documentUrl.match(/\/data\/(\d+)\//);
-      if (cikMatch) {
-        issuer = await getCompanyByCIK(cikMatch[1]);
+      // Use CIK from TrustDocument if available
+      const cik = searchResult.data[0].cik;
+      if (cik) {
+        issuer = await getCompanyByCIK(cik);
       }
     }
 
