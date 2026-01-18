@@ -53,10 +53,9 @@ export async function searchCFPBComplaints(
 ): Promise<CFPBSearchResult> {
   try {
     const params = new URLSearchParams({
-      field: 'all',
+      search_term: companyName,
       size: String(options?.size || 25),
       sort: 'created_date_desc',
-      company: companyName,
     });
 
     if (options?.product) {
