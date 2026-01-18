@@ -209,13 +209,13 @@ export function TrustResults({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="sticky bottom-4"
+          className="sticky bottom-4 safe-area-inset-bottom"
         >
           <Card className="p-4 bg-primary/5 border-primary/20 backdrop-blur-sm">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="space-y-1 min-w-0 flex-1">
                 <p className="text-sm text-muted-foreground">Selected Trust</p>
-                <p className="font-semibold">{selectedTrust.name}</p>
+                <p className="font-semibold truncate">{selectedTrust.name}</p>
                 {selectedTrust.cusips.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Primary CUSIP:</span>
@@ -225,7 +225,7 @@ export function TrustResults({
                   </div>
                 )}
               </div>
-              <Button variant={debtType}>
+              <Button variant={debtType} className="w-full sm:w-auto flex-shrink-0">
                 Continue to Trading Data
               </Button>
             </div>

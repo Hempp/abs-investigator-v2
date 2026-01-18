@@ -312,8 +312,8 @@ export function TradingDataTable({ trades, stats, onExportCSV }: TradingDataTabl
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between p-4 border-t bg-muted/30">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t bg-muted/30">
+          <p className="text-sm text-muted-foreground text-center sm:text-left">
             Showing {page * pageSize + 1} to{' '}
             {Math.min((page + 1) * pageSize, sortedTrades.length)} of{' '}
             {sortedTrades.length} trades
