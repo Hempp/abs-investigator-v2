@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Building2, Calendar, Shield, TrendingUp, ExternalLink, ChevronRight } from 'lucide-react';
+import { Building2, Calendar, Shield, TrendingUp, ExternalLink, ChevronRight, AlertTriangle, CheckCircle2, Database, FileCheck } from 'lucide-react';
 import { Trust } from '@/types';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -103,30 +103,84 @@ export function TrustCard({ trust, isSelected, onSelect, rank }: TrustCardProps)
 
           {/* CUSIPs */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Shield className="h-4 w-4" />
-              <span>Securities ({trust.cusips.length} tranches)</span>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Shield className="h-4 w-4 text-primary" />
+              <span>CUSIP Numbers ({trust.cusips.length})</span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {trust.cusips.slice(0, 4).map((cusip) => (
+            <div className="flex flex-wrap gap-2">
+              {trust.cusips.slice(0, 4).map((cusip, index) => (
                 <Badge
                   key={cusip.cusip}
-                  variant="outline"
-                  className="text-xs font-mono"
+                  variant={index === 0 ? "default" : "outline"}
+                  className="text-sm font-mono px-3 py-1"
                 >
                   {cusip.cusip}
-                  <span className="ml-1 text-muted-foreground">
-                    ({cusip.tranche})
+                  <span className="ml-1.5 text-xs opacity-75">
+                    {cusip.tranche}
                   </span>
                 </Badge>
               ))}
               {trust.cusips.length > 4 && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-sm">
                   +{trust.cusips.length - 4} more
                 </Badge>
               )}
             </div>
           </div>
+
+          {/* Data Verification Status */}
+          {trust.verification && (
+            <div className="space-y-2 pt-2 border-t border-dashed">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileCheck className="h-4 w-4 text-green-500" />
+                <span>Verified Data Sources</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {trust.verification.secVerified && (
+                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-200">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    SEC EDGAR
+                  </Badge>
+                )}
+                {trust.verification.figiVerified && (
+                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-200">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    OpenFIGI
+                  </Badge>
+                )}
+                {trust.verification.cfpbChecked && (
+                  <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 border-purple-200">
+                    <Database className="h-3 w-3 mr-1" />
+                    CFPB
+                  </Badge>
+                )}
+                {trust.verification.traceVerified && (
+                  <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-600 border-orange-200">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    FINRA TRACE
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Servicer Risk Alert */}
+          {trust.servicerComplaints && trust.servicerComplaints.riskScore > 50 && (
+            <div className="p-2 rounded-md bg-amber-500/10 border border-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="text-xs">
+                  <p className="font-medium text-amber-700">Servicer Alert</p>
+                  <p className="text-amber-600">
+                    {trust.servicerComplaints.totalComplaints.toLocaleString()} CFPB complaints found.
+                    {trust.servicerComplaints.topIssues.length > 0 && (
+                      <span> Top issues: {trust.servicerComplaints.topIssues.slice(0, 2).join(', ')}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action Footer */}
           <div className="flex items-center justify-between pt-3 border-t">

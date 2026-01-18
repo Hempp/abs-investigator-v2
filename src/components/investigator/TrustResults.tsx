@@ -213,9 +213,17 @@ export function TrustResults({
         >
           <Card className="p-4 bg-primary/5 border-primary/20 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Selected Trust</p>
                 <p className="font-semibold">{selectedTrust.name}</p>
+                {selectedTrust.cusips.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Primary CUSIP:</span>
+                    <Badge variant="outline" className="text-xs font-mono">
+                      {selectedTrust.cusips[0].cusip}
+                    </Badge>
+                  </div>
+                )}
               </div>
               <Button variant={debtType}>
                 Continue to Trading Data

@@ -88,3 +88,33 @@ export {
   type UnifiedCompanyData,
   type UnifiedTradingData,
 } from './dataService';
+
+// CFPB Consumer Complaints - Servicer analysis
+export {
+  searchCFPBComplaints,
+  getMortgageComplaints,
+  getDebtCollectionComplaints,
+  getCompanyComplaintSummary,
+  type CFPBComplaint,
+  type CFPBSearchResult,
+} from './cfpbComplaints';
+
+// FRED Economic Data - Market context
+export {
+  getFREDSeries,
+  getEconomicContext,
+  getDelinquencyTrends,
+  getInterestRateEnvironment,
+  FRED_SERIES,
+  type FREDObservation,
+  type FREDSeries,
+  type EconomicContext,
+} from './fredEconomic';
+
+// Enhanced Investigation - Multi-source cross-referencing
+export {
+  performEnhancedInvestigation,
+  quickInvestigation,
+  type EnhancedTrust,
+  type InvestigationReport,
+} from './enhancedInvestigation';

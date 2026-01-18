@@ -15,6 +15,33 @@ export interface TrustData {
   series: string[];
 }
 
+export interface ServicerComplaintData {
+  totalComplaints: number;
+  recentComplaints: number;
+  topIssues: string[];
+  riskScore: number;
+  cfpbLink?: string;
+}
+
+export interface EconomicContext {
+  mortgageRate30Year?: number;
+  mortgageRate15Year?: number;
+  delinquencyRate?: number;
+  unemploymentRate?: number;
+  inflationRate?: number;
+  marketCondition: 'favorable' | 'neutral' | 'unfavorable';
+  fredSource?: string;
+}
+
+export interface VerificationData {
+  secVerified: boolean;
+  figiVerified: boolean;
+  traceVerified: boolean;
+  cfpbChecked: boolean;
+  lastVerified?: string;
+  dataSources: string[];
+}
+
 export interface Trust {
   trustId: string;
   dealId?: string;
@@ -29,6 +56,12 @@ export interface Trust {
   matchScore: number;
   matchReasons: string[];
   secLink?: string;
+
+  // Enhanced data from multi-source investigation
+  servicerComplaints?: ServicerComplaintData;
+  economicContext?: EconomicContext;
+  verification?: VerificationData;
+  recommendations?: string[];
 }
 
 export interface TrustDatabase {

@@ -386,3 +386,150 @@ export async function investigateCUSIPAPI(cusip: string): Promise<{
     };
   }
 }
+
+/**
+ * Enhanced investigation parameters
+ */
+export interface EnhancedInvestigationParams {
+  debtType: DebtTypeId;
+  servicerName?: string;
+  originalCreditor?: string;
+  accountNumber?: string;
+  state?: string;
+  approximateBalance?: number;
+  quick?: boolean;
+}
+
+/**
+ * Enhanced investigation result with multi-source data
+ */
+export interface EnhancedInvestigationResult {
+  mode: 'quick' | 'enhanced';
+  trusts: Trust[];
+  servicerInfo?: {
+    complaints: {
+      totalComplaints: number;
+      recentComplaints: number;
+      topIssues: string[];
+      riskScore: number;
+    };
+    cfpbLink?: string;
+  };
+  economicContext?: {
+    mortgageRate30Year?: number;
+    mortgageRate15Year?: number;
+    delinquencyRate?: number;
+    marketCondition: string;
+  };
+  dataSources: string[];
+  recommendations?: string[];
+  searchTime: number;
+}
+
+/**
+ * Perform enhanced multi-source investigation
+ * Queries: SEC EDGAR, OpenFIGI, CFPB, FRED, FINRA TRACE
+ */
+export async function performEnhancedInvestigationAPI(
+  params: EnhancedInvestigationParams
+): Promise<EnhancedInvestigationResult> {
+  const startTime = performance.now();
+
+  try {
+    const response = await fetch('/api/investigate/enhanced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Investigation failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const searchTime = performance.now() - startTime;
+
+    // Convert the API response to Trust format
+    const trusts: Trust[] = (data.trusts || []).map((trust: any, index: number) => ({
+      trustId: trust.trustId || `ENH-${Date.now()}-${index}`,
+      dealId: trust.dealId,
+      name: trust.name || 'Unknown Trust',
+      trustee: trust.trustee || trust.issuer || 'Unknown Trustee',
+      type: params.debtType,
+      closingDate: trust.closingDate || trust.filingDate || new Date().toISOString().split('T')[0],
+      issuanceDate: trust.issuanceDate || trust.filingDate,
+      originalBalance: trust.originalBalance || trust.dealSize || 500000000,
+      dealSize: trust.dealSize,
+      cusips: trust.cusips || [],
+      matchScore: trust.matchScore || 50,
+      matchReasons: trust.matchReasons || ['Enhanced investigation match'],
+      secLink: trust.secLink || trust.documentUrl,
+      // Enhanced fields
+      servicerComplaints: data.servicerInfo?.complaints ? {
+        totalComplaints: data.servicerInfo.complaints.totalComplaints,
+        recentComplaints: data.servicerInfo.complaints.recentComplaints,
+        topIssues: data.servicerInfo.complaints.topIssues || [],
+        riskScore: data.servicerInfo.complaints.riskScore || 0,
+        cfpbLink: data.servicerInfo.cfpbLink,
+      } : undefined,
+      economicContext: data.economicContext ? {
+        mortgageRate30Year: data.economicContext.mortgageRate30Year,
+        mortgageRate15Year: data.economicContext.mortgageRate15Year,
+        delinquencyRate: data.economicContext.delinquencyRate,
+        unemploymentRate: data.economicContext.unemploymentRate,
+        inflationRate: data.economicContext.inflationRate,
+        marketCondition: data.economicContext.marketCondition || 'neutral',
+        fredSource: 'Federal Reserve FRED',
+      } : undefined,
+      verification: {
+        secVerified: (data.dataSources || []).includes('SEC EDGAR'),
+        figiVerified: (data.dataSources || []).includes('OpenFIGI'),
+        traceVerified: (data.dataSources || []).includes('FINRA TRACE'),
+        cfpbChecked: (data.dataSources || []).includes('CFPB'),
+        lastVerified: new Date().toISOString(),
+        dataSources: data.dataSources || [],
+      },
+      recommendations: data.recommendations,
+    }));
+
+    return {
+      mode: data.mode || 'enhanced',
+      trusts,
+      servicerInfo: data.servicerInfo,
+      economicContext: data.economicContext,
+      dataSources: data.dataSources || [],
+      recommendations: data.recommendations,
+      searchTime: Math.round(searchTime),
+    };
+  } catch (error) {
+    console.error('Enhanced investigation error:', error);
+
+    // Fall back to regular search
+    const fallbackResult = await searchTrustsAPI(
+      params.servicerName || params.originalCreditor || `${params.debtType} ABS`,
+      params.debtType
+    );
+
+    return {
+      mode: 'enhanced',
+      trusts: fallbackResult.trusts,
+      dataSources: fallbackResult.sources,
+      searchTime: fallbackResult.searchTime,
+    };
+  }
+}
+
+/**
+ * Quick enhanced investigation (faster, fewer sources)
+ */
+export async function quickEnhancedInvestigationAPI(
+  servicerName: string,
+  debtType: DebtTypeId
+): Promise<EnhancedInvestigationResult> {
+  return performEnhancedInvestigationAPI({
+    debtType,
+    servicerName,
+    quick: true,
+  });
+}

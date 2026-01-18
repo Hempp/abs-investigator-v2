@@ -9,6 +9,7 @@ import {
   searchSpecificDebtAPI,
   searchTrustsAPI,
   getTradingDataAPI,
+  performEnhancedInvestigationAPI,
 } from '@/lib';
 
 export type InvestigationStep = 0 | 1 | 2 | 3;
@@ -178,25 +179,25 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
 
         // Investigation actions
         startInvestigation: async () => {
-          const { activeDebtType, debtInfo } = get();
+          const { activeDebtType, debtInfo, personalInfo } = get();
           if (!activeDebtType) return;
 
           set({ isInvestigating: true, isLoading: true, error: null }, false, 'startInvestigation');
 
           try {
-            // Build search query from debt info
-            const searchTerms = [
-              debtInfo.servicerName || debtInfo.servicer,
-              debtInfo.originator,
-              debtInfo.borrowerName,
-            ].filter(Boolean);
+            // Use enhanced multi-source investigation for real data
+            const servicerName = debtInfo.servicerName || debtInfo.servicer;
+            const originalCreditor = debtInfo.originator;
 
-            const query = searchTerms.length > 0
-              ? searchTerms.join(' ')
-              : `${activeDebtType} ABS trust`;
-
-            // Search real SEC EDGAR and OpenFIGI APIs
-            const result = await searchTrustsAPI(query, activeDebtType);
+            // Perform enhanced investigation with CFPB, FRED, SEC, OpenFIGI, TRACE
+            const result = await performEnhancedInvestigationAPI({
+              debtType: activeDebtType,
+              servicerName: servicerName || undefined,
+              originalCreditor: originalCreditor || undefined,
+              accountNumber: debtInfo.accountNumber || undefined,
+              state: personalInfo?.state || undefined,
+              approximateBalance: debtInfo.currentBalance || debtInfo.originalAmount || undefined,
+            });
 
             set(
               {
@@ -209,15 +210,41 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
               'investigationComplete'
             );
           } catch (error) {
-            set(
-              {
-                isInvestigating: false,
-                isLoading: false,
-                error: error instanceof Error ? error.message : 'Investigation failed',
-              },
-              false,
-              'investigationError'
-            );
+            // Fall back to regular search if enhanced fails
+            try {
+              const searchTerms = [
+                debtInfo.servicerName || debtInfo.servicer,
+                debtInfo.originator,
+                debtInfo.borrowerName,
+              ].filter(Boolean);
+
+              const query = searchTerms.length > 0
+                ? searchTerms.join(' ')
+                : `${activeDebtType} ABS trust`;
+
+              const fallbackResult = await searchTrustsAPI(query, activeDebtType);
+
+              set(
+                {
+                  foundTrusts: fallbackResult.trusts.slice(0, 10),
+                  isInvestigating: false,
+                  isLoading: false,
+                  step: 2,
+                },
+                false,
+                'investigationFallbackComplete'
+              );
+            } catch (fallbackError) {
+              set(
+                {
+                  isInvestigating: false,
+                  isLoading: false,
+                  error: error instanceof Error ? error.message : 'Investigation failed',
+                },
+                false,
+                'investigationError'
+              );
+            }
           }
         },
 
@@ -275,17 +302,13 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
           }, false, 'searchSpecificDebt');
 
           try {
-            // Search SEC EDGAR and OpenFIGI for this specific debt
-            const result = await searchSpecificDebtAPI({
+            // Use enhanced multi-source investigation for real, accurate data
+            const result = await performEnhancedInvestigationAPI({
               debtType: data.debtType,
-              companyName: data.companyName,
-              accountNumber: data.accountNumber,
               servicerName: data.companyName,
-              originalAmount: data.originalAmount,
-              currentBalance: data.currentBalance,
-              firstName: personalInfo.firstName,
-              lastName: personalInfo.lastName,
+              accountNumber: data.accountNumber,
               state: personalInfo.state,
+              approximateBalance: data.currentBalance || data.originalAmount,
             });
 
             set(
@@ -306,15 +329,48 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
               'searchSpecificDebtComplete'
             );
           } catch (error) {
-            set(
-              {
-                isInvestigating: false,
-                isLoading: false,
-                error: error instanceof Error ? error.message : 'Search failed',
-              },
-              false,
-              'searchSpecificDebtError'
-            );
+            // Fall back to regular search if enhanced fails
+            try {
+              const fallbackResult = await searchSpecificDebtAPI({
+                debtType: data.debtType,
+                companyName: data.companyName,
+                accountNumber: data.accountNumber,
+                servicerName: data.companyName,
+                originalAmount: data.originalAmount,
+                currentBalance: data.currentBalance,
+                firstName: personalInfo.firstName,
+                lastName: personalInfo.lastName,
+                state: personalInfo.state,
+              });
+
+              set(
+                {
+                  foundTrusts: fallbackResult.trusts.slice(0, 10),
+                  debtInfo: {
+                    borrowerName: `${personalInfo.firstName} ${personalInfo.lastName}`,
+                    servicerName: data.companyName,
+                    accountNumber: data.accountNumber,
+                    originalAmount: data.originalAmount,
+                    currentBalance: data.currentBalance,
+                  },
+                  isInvestigating: false,
+                  isLoading: false,
+                  step: 2,
+                },
+                false,
+                'searchSpecificDebtFallbackComplete'
+              );
+            } catch (fallbackError) {
+              set(
+                {
+                  isInvestigating: false,
+                  isLoading: false,
+                  error: error instanceof Error ? error.message : 'Search failed',
+                },
+                false,
+                'searchSpecificDebtError'
+              );
+            }
           }
         },
 
@@ -322,7 +378,8 @@ export const useInvestigationStore = create<InvestigationState & InvestigationAc
           // Get real trading data for the first CUSIP from FINRA TRACE
           const cusip = trust.cusips[0]?.cusip;
 
-          set({ selectedTrust: trust, step: 3, isLoading: true }, false, 'selectTrust');
+          // Set activeDebtType from the trust's type for letter generation
+          set({ selectedTrust: trust, activeDebtType: trust.type, step: 3, isLoading: true }, false, 'selectTrust');
 
           if (cusip) {
             try {
